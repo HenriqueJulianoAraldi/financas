@@ -37,8 +37,14 @@ async function main() {
   else showAuthGate();
 
   onAuthChange((next) => {
-    if (next && !started) startApp(next);
-    else if (!next && started) resetToLogin();
+    // O supabase-js executa este callback segurando um lock interno da
+    // autenticação. Consultar o banco aqui dentro pode voltar vazio (a RLS
+    // filtra tudo e devolve 200 com []), o que fazia o app achar que era um
+    // usuário novo e semear as categorias de novo. Sair do callback primeiro.
+    setTimeout(() => {
+      if (next && !started) startApp(next);
+      else if (!next && started) resetToLogin();
+    }, 0);
   });
 }
 

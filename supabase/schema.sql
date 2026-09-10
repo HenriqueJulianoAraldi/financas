@@ -20,6 +20,10 @@ create table if not exists public.categories (
   created_at     timestamptz not null default now()
 );
 
+-- Trava contra duplicata: um nome de categoria por usuário e tipo.
+create unique index if not exists categories_user_name_kind_uniq
+  on public.categories (user_id, lower(name), kind);
+
 -- ---------------------------------------------------------------------
 -- Contas e cartões
 -- ---------------------------------------------------------------------
@@ -33,6 +37,10 @@ create table if not exists public.accounts (
   archived    boolean not null default false,
   created_at  timestamptz not null default now()
 );
+
+-- Trava contra duplicata: um nome de conta por usuário.
+create unique index if not exists accounts_user_name_uniq
+  on public.accounts (user_id, lower(name));
 
 -- ---------------------------------------------------------------------
 -- Regras de lançamentos recorrentes

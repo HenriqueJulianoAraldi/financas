@@ -196,6 +196,23 @@ const DEFAULT_CATEGORIES = [
 
 export async function ensureSeed() {
   if (state.categories.length || state.accounts.length) return false;
+
+  // Lista vazia não prova que a conta é nova: uma consulta feita antes do token
+  // de acesso ser aplicado volta [] com status 200, porque a RLS filtra tudo.
+  // Confirmar que existe usuário autenticado e reconferir no servidor evita
+  // semear as categorias uma segunda vez.
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth?.user) return false;
+
+  const { count, error } = await supabase
+    .from(TABLES.categories)
+    .select('id', { count: 'exact', head: true });
+  if (error) throw new Error(prettyError(error, TABLES.categories));
+  if (count) {
+    await loadAll(state.userId);
+    return false;
+  }
+
   await createMany('categories', DEFAULT_CATEGORIES);
   await createMany('accounts', [
     { name: 'Conta corrente', type: 'checking' },
