@@ -15,6 +15,11 @@ export const ASSET_CLASSES = [
   { value: 'outro', label: 'Outro' },
 ];
 
+export const ASSET_MODES = [
+  { value: 'quota', label: 'Cotas — ação, FII, cripto' },
+  { value: 'balance', label: 'Saldo — cofrinho, CDB, poupança' },
+];
+
 export const ACCOUNT_TYPES = [
   { value: 'checking', label: 'Conta corrente' },
   { value: 'cash', label: 'Dinheiro' },
@@ -204,25 +209,39 @@ export function positionOf(assetId) {
   };
 }
 
+/**
+ * Ativo de saldo: cofrinho, CDB, poupança, Tesouro Selic. Não tem quantidade
+ * nem cotação — você informa o saldo que o banco mostra, e o rendimento é a
+ * diferença entre ele e o que foi aportado. Os aportes e resgates são gravados
+ * em asset_trades com preço 1, então `cost` já sai como aportes − resgates.
+ */
+export function isBalanceAsset(asset) {
+  return asset?.pricing_mode === 'balance';
+}
+
 /** Carteira completa: posições, participação e alvo de alocação. */
 export function portfolio() {
   const rows = state.assets
     .filter((asset) => !asset.archived)
     .map((asset) => {
       const position = positionOf(asset.id);
+      const balanceMode = isBalanceAsset(asset);
       const price = Number(asset.current_price) || 0;
-      const value = round2(position.quantity * price);
+      const value = balanceMode
+        ? round2(Number(asset.balance) || 0)
+        : round2(position.quantity * price);
       const pnl = round2(value - position.cost);
       return {
         asset,
         ...position,
+        balanceMode,
         price,
         value,
         pnl,
         pnlPct: position.cost > 0 ? (pnl / position.cost) * 100 : 0,
       };
     })
-    .filter((row) => row.quantity > 0 || row.tradeCount > 0);
+    .filter((row) => row.quantity > 0 || row.tradeCount > 0 || row.value > 0);
 
   const total = round2(rows.reduce((sum, row) => sum + row.value, 0));
   const cost = round2(rows.reduce((sum, row) => sum + row.cost, 0));

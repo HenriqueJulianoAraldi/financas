@@ -3,7 +3,9 @@
 import { el, field, select, iconButton, modal, confirmDialog, toast, empty } from '../dom.js';
 import * as store from '../store.js';
 import { state } from '../store.js';
-import { portfolio, positionOf, ASSET_CLASSES, classLabel } from '../selectors.js';
+import {
+  portfolio, positionOf, isBalanceAsset, ASSET_CLASSES, ASSET_MODES, classLabel,
+} from '../selectors.js';
 import { brl, num, pct, signedPct, parseMoney, round2, todayISO, currentMonth, monthStart, dateBR } from '../format.js';
 
 export function render() {
@@ -22,8 +24,8 @@ export function render() {
 
     el('div', { class: 'toolbar' },
       el('button', { class: 'btn btn-primary', onclick: () => openAssetForm() }, '+ Novo ativo'),
-      el('button', { class: 'btn btn-ghost', onclick: () => openTradeForm() }, 'Registrar compra/venda'),
-      el('button', { class: 'btn btn-ghost', onclick: () => openPriceUpdate(wallet) }, 'Atualizar preços'),
+      el('button', { class: 'btn btn-ghost', onclick: () => openTradeForm() }, 'Aporte / resgate'),
+      el('button', { class: 'btn btn-ghost', onclick: () => openPriceUpdate(wallet) }, 'Atualizar valores'),
       el('span', { class: 'spacer' }),
       wallet.total > 0 && el('button', {
         class: 'btn btn-ghost btn-sm',
@@ -103,14 +105,19 @@ function assetsCard(wallet) {
 
 function assetRow(row) {
   const stale = !row.asset.price_updated_at;
+  // Ativo de saldo não tem quantidade nem cotação: as colunas ficam vazias e o
+  // total aportado aparece embaixo do nome, que é o número útil ali.
   return el('tr', {},
     el('td', {},
       el('div', { class: 'cell-main' }, row.asset.ticker),
-      el('div', { class: 'cell-sub' }, row.asset.name || classLabel(row.asset.asset_class))
+      el('div', { class: 'cell-sub' },
+        row.balanceMode
+          ? `${classLabel(row.asset.asset_class)} · aportado ${brl(row.cost)}`
+          : (row.asset.name || classLabel(row.asset.asset_class)))
     ),
-    el('td', { class: 'num' }, num(row.quantity, 8)),
-    el('td', { class: 'num' }, brl(row.avgPrice)),
-    el('td', { class: `num ${stale ? 'dim' : ''}` }, brl(row.price)),
+    el('td', { class: `num ${row.balanceMode ? 'dim' : ''}` }, row.balanceMode ? '—' : num(row.quantity, 8)),
+    el('td', { class: `num ${row.balanceMode ? 'dim' : ''}` }, row.balanceMode ? '—' : brl(row.avgPrice)),
+    el('td', { class: `num ${stale ? 'dim' : ''}` }, row.balanceMode ? '—' : brl(row.price)),
     el('td', { class: 'num' }, brl(row.value)),
     el('td', { class: `num ${row.pnl >= 0 ? 'pos' : 'neg'}` },
       `${row.pnl >= 0 ? '+' : '−'} ${brl(Math.abs(row.pnl))}`,
@@ -131,7 +138,7 @@ function tradesCard() {
   const assets = new Map(state.assets.map((asset) => [asset.id, asset]));
 
   return el('div', { class: 'card' },
-    el('div', { class: 'card-head' }, el('h2', {}, 'Últimas negociações')),
+    el('div', { class: 'card-head' }, el('h2', {}, 'Últimas movimentações')),
     el('div', { class: 'table-wrap' },
       el('table', {},
         el('thead', {}, el('tr', {},
@@ -139,18 +146,25 @@ function tradesCard() {
           el('th', { class: 'num' }, 'Qtd.'), el('th', { class: 'num' }, 'Preço'),
           el('th', { class: 'num' }, 'Total'), el('th', {}, '')
         )),
-        el('tbody', {}, ...trades.map((trade) => el('tr', {},
-          el('td', { class: 'num' }, dateBR(trade.date)),
-          el('td', {}, assets.get(trade.asset_id)?.ticker ?? '—'),
-          el('td', {}, el('span', { class: `chip ${trade.side === 'buy' ? '' : 'neg'}` },
-            trade.side === 'buy' ? 'Compra' : 'Venda')),
-          el('td', { class: 'num' }, num(trade.quantity, 8)),
-          el('td', { class: 'num' }, brl(trade.price)),
-          el('td', { class: 'num' },
-            brl(Number(trade.quantity) * Number(trade.price) + Number(trade.fees || 0))),
-          el('td', { class: 'actions' },
-            iconButton('🗑', 'Excluir negociação', () => removeTrade(trade), 'danger'))
-        )))
+        el('tbody', {}, ...trades.map((trade) => {
+          const target = assets.get(trade.asset_id);
+          const balanceMode = isBalanceAsset(target);
+          const buy = trade.side === 'buy';
+          return el('tr', {},
+            el('td', { class: 'num' }, dateBR(trade.date)),
+            el('td', {}, target?.ticker ?? '—'),
+            el('td', {}, el('span', { class: `chip ${buy ? '' : 'neg'}` },
+              balanceMode ? (buy ? 'Aporte' : 'Resgate') : (buy ? 'Compra' : 'Venda'))),
+            el('td', { class: `num ${balanceMode ? 'dim' : ''}` },
+              balanceMode ? '—' : num(trade.quantity, 8)),
+            el('td', { class: `num ${balanceMode ? 'dim' : ''}` },
+              balanceMode ? '—' : brl(trade.price)),
+            el('td', { class: 'num' },
+              brl(Number(trade.quantity) * Number(trade.price) + Number(trade.fees || 0))),
+            el('td', { class: 'actions' },
+              iconButton('🗑', 'Excluir movimentação', () => removeTrade(trade), 'danger'))
+          );
+        }))
       )
     )
   );
@@ -160,46 +174,111 @@ function tradesCard() {
 
 function openAssetForm(existing = null) {
   const editing = Boolean(existing);
+  const startMode = existing?.pricing_mode ?? 'quota';
+
+  let priceField;
+  let balanceField;
+  let investedField;
+
   modal({
     title: editing ? `Editar ${existing.ticker}` : 'Novo ativo',
-    render: () => el('div', { class: 'form-grid' },
-      field('Ticker / código', el('input', {
-        type: 'text', name: 'ticker', required: true, maxlength: '24',
-        value: existing?.ticker ?? '', placeholder: 'PETR4, BTC, CDB Banco X',
-        style: { textTransform: 'uppercase' },
-      })),
-      field('Classe', select(ASSET_CLASSES, {
-        name: 'asset_class', value: existing?.asset_class ?? 'acao',
-      })),
-      field('Nome (opcional)', el('input', {
-        type: 'text', name: 'name', maxlength: '80', value: existing?.name ?? '',
-      })),
-      field('Preço atual', el('input', {
+    render: () => {
+      priceField = field('Preço atual', el('input', {
         type: 'text', name: 'current_price', inputmode: 'decimal', placeholder: '0,00',
         value: existing?.current_price ? String(existing.current_price).replace('.', ',') : '',
-      }), 'Você atualiza quando quiser.'),
-      field('Alvo na carteira (%)', el('input', {
-        type: 'number', name: 'target_pct', min: '0', max: '100', step: '0.5',
-        value: existing?.target_pct ?? '',
-      }), 'Opcional.')
-    ),
+      }), 'Você atualiza quando quiser.');
+
+      // Os dois números que o banco já mostra prontos. O aportado só aparece no
+      // cadastro: depois disso ele muda por aporte e resgate, não editando aqui.
+      investedField = field('Total já aportado', el('input', {
+        type: 'text', name: 'invested', inputmode: 'decimal', placeholder: '0,00',
+      }), 'Quanto você colocou, somando tudo.');
+
+      balanceField = field('Saldo atual', el('input', {
+        type: 'text', name: 'balance', inputmode: 'decimal', placeholder: '0,00',
+        value: existing?.balance ? String(existing.balance).replace('.', ',') : '',
+      }), 'O valor que o banco mostra hoje.');
+
+      const applyMode = (mode) => {
+        const balanceMode = mode === 'balance';
+        priceField.hidden = balanceMode;
+        balanceField.hidden = !balanceMode;
+        investedField.hidden = !balanceMode || editing;
+      };
+      applyMode(startMode);
+
+      return el('div', { class: 'form-grid' },
+        field('Ticker / nome curto', el('input', {
+          type: 'text', name: 'ticker', required: true, maxlength: '24',
+          value: existing?.ticker ?? '', placeholder: 'PETR4, BTC, COFRINHO',
+          style: { textTransform: 'uppercase' },
+        })),
+        field('Como acompanhar', select(ASSET_MODES, {
+          name: 'pricing_mode',
+          value: startMode,
+          onchange: (event) => applyMode(event.target.value),
+        })),
+        field('Classe', select(ASSET_CLASSES, {
+          name: 'asset_class', value: existing?.asset_class ?? 'acao',
+        })),
+        field('Nome (opcional)', el('input', {
+          type: 'text', name: 'name', maxlength: '80', value: existing?.name ?? '',
+        })),
+        priceField,
+        investedField,
+        balanceField,
+        field('Alvo na carteira (%)', el('input', {
+          type: 'number', name: 'target_pct', min: '0', max: '100', step: '0.5',
+          value: existing?.target_pct ?? '',
+        }), 'Opcional.')
+      );
+    },
+
     onSubmit: async (data) => {
-      const price = data.get('current_price').trim();
-      const parsedPrice = price ? parseMoney(price) : 0;
-      if (price && !Number.isFinite(parsedPrice)) throw new Error('Preço inválido.');
+      const mode = data.get('pricing_mode');
+      const balanceMode = mode === 'balance';
+
+      const raw = (balanceMode ? data.get('balance') : data.get('current_price')).trim();
+      const parsed = raw ? parseMoney(raw) : 0;
+      if (raw && (!Number.isFinite(parsed) || parsed < 0)) {
+        throw new Error(balanceMode ? 'Saldo inválido.' : 'Preço inválido.');
+      }
 
       const row = {
         ticker: data.get('ticker').trim().toUpperCase(),
         name: data.get('name').trim() || null,
         asset_class: data.get('asset_class'),
-        current_price: parsedPrice || 0,
-        price_updated_at: parsedPrice ? new Date().toISOString() : existing?.price_updated_at ?? null,
+        pricing_mode: mode,
+        current_price: balanceMode ? 0 : (parsed || 0),
+        balance: balanceMode ? round2(parsed || 0) : 0,
+        price_updated_at: parsed ? new Date().toISOString() : existing?.price_updated_at ?? null,
         target_pct: data.get('target_pct') ? Number(data.get('target_pct')) : null,
       };
 
-      if (editing) await store.update('assets', existing.id, row);
-      else await store.create('assets', row);
-      toast(editing ? 'Ativo atualizado.' : 'Ativo cadastrado.', 'success');
+      if (editing) {
+        await store.update('assets', existing.id, row);
+        toast('Ativo atualizado.', 'success');
+        return;
+      }
+
+      const created = await store.create('assets', row);
+
+      // O total aportado vira a primeira movimentação: é ele que define o custo,
+      // e o rendimento passa a ser saldo − aportado.
+      if (balanceMode) {
+        const investedRaw = (data.get('invested') || '').trim();
+        const invested = investedRaw ? parseMoney(investedRaw) : 0;
+        if (investedRaw && (!Number.isFinite(invested) || invested < 0)) {
+          throw new Error('Total aportado inválido.');
+        }
+        if (invested > 0) {
+          await store.create('trades', {
+            asset_id: created.id, date: todayISO(), side: 'buy',
+            quantity: round2(invested), price: 1, fees: 0,
+          });
+        }
+      }
+      toast('Ativo cadastrado.', 'success');
     },
   });
 }
@@ -211,9 +290,14 @@ function openTradeForm(asset = null) {
   }
 
   const totalPreview = el('p', { class: 'muted small', style: { margin: 0 } }, 'Total: —');
+  const findAsset = (id) => state.assets.find((item) => item.id === id);
+
+  let quotaFields;
+  let amountField;
+  let sideSelect;
 
   modal({
-    title: 'Registrar negociação',
+    title: 'Registrar movimentação',
     render: (form) => {
       const recalc = () => {
         const quantity = parseMoney(form.quantity.value);
@@ -225,42 +309,95 @@ function openTradeForm(asset = null) {
           : 'Total: —';
       };
 
+      // Ativo de saldo pede um número só; ativo de cotas pede quantidade e preço.
+      const applyMode = () => {
+        const balanceMode = isBalanceAsset(findAsset(form.asset_id.value));
+        quotaFields.hidden = balanceMode;
+        amountField.hidden = !balanceMode;
+        totalPreview.hidden = balanceMode;
+        // Campo escondido e obrigatório trava o envio do formulário.
+        for (const name of ['quantity', 'price']) form[name].required = !balanceMode;
+        form.amount.required = balanceMode;
+        sideSelect.options[0].textContent = balanceMode ? 'Aporte' : 'Compra';
+        sideSelect.options[1].textContent = balanceMode ? 'Resgate' : 'Venda';
+      };
+
+      sideSelect = select(
+        [{ value: 'buy', label: 'Compra' }, { value: 'sell', label: 'Venda' }],
+        { name: 'side', value: 'buy', onchange: recalc }
+      );
+
+      quotaFields = el('div', { class: 'form-grid' },
+        field('Quantidade', el('input', {
+          type: 'text', name: 'quantity', required: true, inputmode: 'decimal',
+          placeholder: '100', oninput: recalc,
+        })),
+        field('Preço unitário', el('input', {
+          type: 'text', name: 'price', required: true, inputmode: 'decimal',
+          placeholder: '0,00', oninput: recalc,
+        })),
+        field('Taxas', el('input', {
+          type: 'text', name: 'fees', inputmode: 'decimal', placeholder: '0,00', oninput: recalc,
+        }))
+      );
+
+      amountField = field('Valor', el('input', {
+        type: 'text', name: 'amount', inputmode: 'decimal', placeholder: '0,00',
+      }), 'Quanto entrou ou saiu. O saldo é ajustado sozinho.');
+
       const wrap = el('div', { class: 'stack' },
         el('div', { class: 'form-grid' },
           field('Ativo', select(
             state.assets.map((item) => ({ value: item.id, label: item.ticker })),
-            { name: 'asset_id', value: asset?.id ?? state.assets[0].id }
+            { name: 'asset_id', value: asset?.id ?? state.assets[0].id, onchange: applyMode }
           )),
-          field('Operação', select(
-            [{ value: 'buy', label: 'Compra' }, { value: 'sell', label: 'Venda' }],
-            { name: 'side', value: 'buy', onchange: recalc }
-          )),
-          field('Data', el('input', { type: 'date', name: 'date', required: true, value: todayISO() })),
-          field('Quantidade', el('input', {
-            type: 'text', name: 'quantity', required: true, inputmode: 'decimal',
-            placeholder: '100', oninput: recalc,
-          })),
-          field('Preço unitário', el('input', {
-            type: 'text', name: 'price', required: true, inputmode: 'decimal',
-            placeholder: '0,00', oninput: recalc,
-          })),
-          field('Taxas', el('input', {
-            type: 'text', name: 'fees', inputmode: 'decimal', placeholder: '0,00', oninput: recalc,
-          }))
+          field('Operação', sideSelect),
+          field('Data', el('input', { type: 'date', name: 'date', required: true, value: todayISO() }))
         ),
+        quotaFields,
+        amountField,
         totalPreview
       );
+
+      queueMicrotask(applyMode);
       return wrap;
     },
+
     onSubmit: async (data) => {
+      const assetId = data.get('asset_id');
+      const side = data.get('side');
+      const target = findAsset(assetId);
+      const balanceMode = isBalanceAsset(target);
+
+      if (balanceMode) {
+        const amount = parseMoney(data.get('amount'));
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error('Informe um valor maior que zero.');
+
+        const current = round2(Number(target.balance) || 0);
+        if (side === 'sell' && amount > current + 1e-9) {
+          throw new Error(`O saldo é ${brl(current)} — não dá para resgatar ${brl(amount)}.`);
+        }
+
+        // Preço 1 faz o custo virar simplesmente aportes − resgates.
+        await store.create('trades', {
+          asset_id: assetId, date: data.get('date'), side,
+          quantity: round2(amount), price: 1, fees: 0,
+        });
+        await store.update('assets', assetId, {
+          balance: round2(side === 'buy' ? current + amount : current - amount),
+          price_updated_at: new Date().toISOString(),
+        });
+        toast(side === 'buy' ? 'Aporte registrado.' : 'Resgate registrado.', 'success');
+        return;
+      }
+
       const quantity = parseMoney(data.get('quantity'));
       const price = parseMoney(data.get('price'));
       const fees = data.get('fees').trim() ? parseMoney(data.get('fees')) : 0;
       if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantidade inválida.');
       if (!Number.isFinite(price) || price < 0) throw new Error('Preço inválido.');
 
-      const assetId = data.get('asset_id');
-      if (data.get('side') === 'sell') {
+      if (side === 'sell') {
         const held = positionOf(assetId).quantity;
         if (quantity > held + 1e-9) {
           throw new Error(`Você tem ${num(held, 8)} em carteira — não dá para vender ${num(quantity, 8)}.`);
@@ -270,7 +407,7 @@ function openTradeForm(asset = null) {
       await store.create('trades', {
         asset_id: assetId,
         date: data.get('date'),
-        side: data.get('side'),
+        side,
         quantity,
         price,
         fees: round2(fees) || 0,
@@ -280,25 +417,29 @@ function openTradeForm(asset = null) {
   });
 }
 
-/** Edita o preço de todos os ativos numa tela só e grava o patrimônio do mês. */
+/** Edita preços e saldos numa tela só e grava o patrimônio do mês. */
 function openPriceUpdate(wallet) {
-  const rows = wallet.rows.filter((row) => row.quantity > 0);
+  const rows = wallet.rows.filter((row) => row.quantity > 0 || row.balanceMode);
   if (!rows.length) {
     toast('Nenhum ativo com posição aberta.', 'error');
     return;
   }
 
+  const currentOf = (row) => (row.balanceMode ? row.value : row.price);
+
   modal({
-    title: 'Atualizar preços',
+    title: 'Atualizar preços e saldos',
     width: '520px',
     render: () => el('div', { class: 'stack' },
       el('p', { class: 'muted small', style: { margin: 0 } },
         'Ao salvar, o patrimônio do mês atual também é registrado para o gráfico de evolução.'),
       ...rows.map((row) => field(
-        `${row.asset.ticker} · ${num(row.quantity, 8)} un.`,
+        row.balanceMode
+          ? `${row.asset.ticker} · saldo`
+          : `${row.asset.ticker} · ${num(row.quantity, 8)} un.`,
         el('input', {
           type: 'text', name: row.asset.id, inputmode: 'decimal',
-          value: String(row.price ?? 0).replace('.', ','),
+          value: String(currentOf(row) ?? 0).replace('.', ','),
         })
       ))
     ),
@@ -307,19 +448,19 @@ function openPriceUpdate(wallet) {
       for (const row of rows) {
         const raw = (data.get(row.asset.id) || '').trim();
         if (!raw) continue;
-        const price = parseMoney(raw);
-        if (!Number.isFinite(price) || price < 0) {
-          throw new Error(`Preço inválido em ${row.asset.ticker}.`);
+        const value = parseMoney(raw);
+        if (!Number.isFinite(value) || value < 0) {
+          throw new Error(`Valor inválido em ${row.asset.ticker}.`);
         }
-        if (Math.abs(price - row.price) < 1e-9) continue;
+        if (Math.abs(value - currentOf(row)) < 1e-9) continue;
         await store.update('assets', row.asset.id, {
-          current_price: price,
+          ...(row.balanceMode ? { balance: round2(value) } : { current_price: value }),
           price_updated_at: new Date().toISOString(),
         });
         changed += 1;
       }
       await store.upsertSnapshot(monthStart(currentMonth()), portfolio().total);
-      toast(changed ? `${changed} preço(s) atualizado(s).` : 'Patrimônio do mês registrado.', 'success');
+      toast(changed ? `${changed} valor(es) atualizado(s).` : 'Patrimônio do mês registrado.', 'success');
     },
   });
 }
@@ -348,9 +489,12 @@ async function removeAsset(asset) {
 }
 
 async function removeTrade(trade) {
+  const balanceMode = isBalanceAsset(state.assets.find((a) => a.id === trade.asset_id));
   const ok = await confirmDialog({
-    title: 'Excluir negociação',
-    message: 'O preço médio e a posição serão recalculados.',
+    title: 'Excluir movimentação',
+    message: balanceMode
+      ? 'O total aportado será recalculado. O saldo atual não muda — ajuste em "Atualizar valores" se precisar.'
+      : 'O preço médio e a posição serão recalculados.',
   });
   if (!ok) return;
   try {

@@ -131,7 +131,12 @@ create table if not exists public.assets (
   name             text,
   asset_class      text not null default 'acao'
                    check (asset_class in ('acao', 'fii', 'rf', 'tesouro', 'cripto', 'internacional', 'outro')),
+  -- 'quota': quantidade × cotação (ação, FII, cripto).
+  -- 'balance': só o saldo informado (cofrinho, CDB, poupança, Tesouro Selic).
+  pricing_mode     text not null default 'quota'
+                   check (pricing_mode in ('quota', 'balance')),
   current_price    numeric(18, 6) not null default 0,
+  balance          numeric(18, 2) not null default 0,
   price_updated_at timestamptz,
   target_pct       numeric(5, 2),
   archived         boolean not null default false,

@@ -84,7 +84,7 @@ let openDialog = null;
  * `onSubmit(FormData, form)` pode ser async; lançar um Error mostra a
  * mensagem sem fechar o modal.
  */
-export function modal({ title, submitLabel = 'Salvar', destructive = false, render, onSubmit, width }) {
+export function modal({ title, submitLabel = 'Salvar', destructive = false, render, onSubmit, onClose, width }) {
   closeModal();
 
   const error = el('p', { class: 'modal-error', hidden: true });
@@ -128,10 +128,21 @@ export function modal({ title, submitLabel = 'Salvar', destructive = false, rend
     form
   );
 
-  dialog.addEventListener('close', () => {
-    dialog.remove();
+  // Não dá para confiar no evento 'close' do <dialog>: em alguns ambientes ele
+  // não dispara, e aí o modal ficava no DOM para sempre e quem esperava por ele
+  // (o confirmDialog) nunca era avisado. A limpeza é chamada na mão e é
+  // idempotente; o listener fica só para o Esc, que fecha por fora.
+  let pendingClose = onClose;
+  const cleanup = () => {
     if (openDialog === dialog) openDialog = null;
-  });
+    dialog.remove();
+    const callback = pendingClose;
+    pendingClose = null;
+    if (callback) callback();
+  };
+  dialog.cleanupModal = cleanup;
+
+  dialog.addEventListener('close', cleanup);
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) closeModal();
   });
@@ -146,22 +157,30 @@ export function modal({ title, submitLabel = 'Salvar', destructive = false, rend
 }
 
 export function closeModal() {
-  if (openDialog?.open) openDialog.close();
+  const dialog = openDialog;
   openDialog = null;
+  if (!dialog) return;
+  if (dialog.open) dialog.close();
+  dialog.cleanupModal?.();
 }
 
 /** Confirmação destrutiva. Resolve para true/false. */
 export function confirmDialog({ title, message, confirmLabel = 'Excluir' }) {
   return new Promise((resolve) => {
-    let decided = false;
-    const dialog = modal({
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    modal({
       title,
       submitLabel: confirmLabel,
       destructive: true,
       render: () => el('p', { class: 'modal-message' }, message),
-      onSubmit: async () => { decided = true; resolve(true); },
+      onSubmit: async () => finish(true),
+      onClose: () => finish(false),
     });
-    dialog.addEventListener('close', () => { if (!decided) resolve(false); });
   });
 }
 

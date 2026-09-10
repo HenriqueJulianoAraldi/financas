@@ -107,10 +107,18 @@ seguinte — por isso vale cadastrar o dia de fechamento do cartão em **Ajustes
 com a mesma data de compra e competências consecutivas. Excluir uma parcela exclui a
 compra inteira.
 
-**Preços dos investimentos.** São atualizados à mão, em **Investimentos → Atualizar
-preços**. Cotação automática ficou de fora porque as APIs gratuitas confiáveis exigem
-uma chave, e chave em site estático é chave exposta. Se um dia quiser, dá para colocar
-uma Edge Function no Supabase guardando a chave do lado do servidor.
+**Dois tipos de investimento.** No cadastro do ativo você escolhe como acompanhar:
+
+- **Cotas** — ação, FII, cripto. Você registra compras e vendas com quantidade e preço;
+  o preço médio sai da média ponderada das compras.
+- **Saldo** — cofrinho, CDB, poupança, Tesouro Selic. Não tem quantidade nem cotação:
+  no cadastro você informa **quanto já aportou** e **o saldo de hoje**, e o rendimento é
+  a diferença entre os dois. Depois, aporte e resgate mexem no saldo sozinhos.
+
+**Preços e saldos** são atualizados à mão, em **Investimentos → Atualizar valores**.
+Cotação automática ficou de fora porque as APIs gratuitas confiáveis exigem uma chave, e
+chave em site estático é chave exposta. Se um dia quiser, dá para colocar uma Edge
+Function no Supabase guardando a chave do lado do servidor.
 
 **Patrimônio.** Cada vez que você atualiza os preços, o total do mês é gravado em
 `portfolio_snapshots` — é isso que desenha o gráfico de evolução.
