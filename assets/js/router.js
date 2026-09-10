@@ -42,6 +42,18 @@ export function buildTabs(nav) {
   }
 }
 
+/**
+ * Leva a página ao topo ao trocar de tela.
+ * Não usar scrollIntoView no container: ele fica abaixo do cabeçalho, e alinhar
+ * o topo dele com o topo da janela empurra o cabeçalho para fora — a tela abre
+ * já rolada. A segunda chamada, no quadro seguinte, cobre os navegadores que
+ * reposicionam a rolagem depois do hashchange.
+ */
+function scrollToTop() {
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
+}
+
 function markActive(nav) {
   const active = currentRoute().path;
   for (const tab of nav.querySelectorAll('.tab')) {
@@ -54,13 +66,14 @@ export function initRouter({ viewEl, navEl, onRender }) {
   container = viewEl;
   onNavigate = onRender;
   buildTabs(navEl);
+  // Sem isto o navegador guarda a rolagem de cada entrada do histórico e a
+  // devolve depois do hashchange, desfazendo o scroll para o topo.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
   window.addEventListener('hashchange', () => {
     markActive(navEl);
     render(true);
-    // A tela nova começa no topo da página. Não usar scrollIntoView no
-    // container: ele fica abaixo do cabeçalho, e alinhar o topo dele com o
-    // topo da janela empurra o cabeçalho para fora, abrindo a tela rolada.
-    window.scrollTo(0, 0);
+    scrollToTop();
   });
   markActive(navEl);
   render(true);
