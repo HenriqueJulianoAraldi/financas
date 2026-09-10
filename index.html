@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0910">
+<meta name="description" content="Controle pessoal de gastos e investimentos.">
+<title>Finanças</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0910'/%3E%3Cpath d='M9 21.5 14 14l4 4.5 5.5-9' fill='none' stroke='%238b5cf6' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='23.5' cy='9.5' r='2.4' fill='%23d99a2b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="spinner" aria-hidden="true"></div>
+  <p>Carregando…</p>
+</div>
+
+<!-- config.js ainda com os valores de exemplo -->
+<section id="setup" class="gate" hidden>
+  <div class="gate-card">
+    <div class="brand brand-lg"><span class="brand-mark"></span>Finanças</div>
+    <h1>Falta conectar o Supabase</h1>
+    <p class="muted">Abra <code>assets/js/config.js</code> e cole a URL e a chave anon do seu projeto.</p>
+    <ol class="steps">
+      <li>Crie um projeto grátis em <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com</a>.</li>
+      <li>Em <strong>SQL Editor</strong>, cole e rode todo o <code>supabase/schema.sql</code>.</li>
+      <li>Em <strong>Project Settings → API</strong>, copie a <em>Project URL</em> e a <em>anon public key</em>.</li>
+      <li>Cole as duas em <code>assets/js/config.js</code> e recarregue esta página.</li>
+    </ol>
+    <p class="muted small">O passo a passo completo está no <code>README.md</code>.</p>
+  </div>
+</section>
+
+<!-- login -->
+<section id="auth" class="gate" hidden>
+  <div class="gate-card">
+    <div class="brand brand-lg"><span class="brand-mark"></span>Finanças</div>
+    <h1>Entrar</h1>
+    <p class="muted">Seus lançamentos ficam na sua conta e sincronizam entre celular e computador.</p>
+
+    <form id="auth-form" class="auth-form" autocomplete="on">
+      <label class="field">
+        <span class="field-label">E-mail</span>
+        <input type="email" name="email" required autocomplete="username" placeholder="voce@exemplo.com">
+      </label>
+      <label class="field" id="password-field">
+        <span class="field-label">Senha</span>
+        <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="mínimo 6 caracteres">
+      </label>
+      <p id="auth-error" class="modal-error" hidden></p>
+      <p id="auth-info" class="auth-info" hidden></p>
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-primary btn-block" id="auth-submit">Entrar</button>
+        <button type="button" class="btn btn-ghost btn-block" id="auth-signup">Criar conta</button>
+      </div>
+    </form>
+
+    <button type="button" class="linkish" id="auth-toggle-magic">Prefiro receber um link por e-mail</button>
+  </div>
+</section>
+
+<!-- app -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"></span>Finanças</div>
+
+    <div class="month-nav" id="month-nav">
+      <button type="button" class="icon-btn" id="month-prev" aria-label="Mês anterior">‹</button>
+      <button type="button" class="month-current" id="month-current" aria-label="Escolher mês"></button>
+      <button type="button" class="icon-btn" id="month-next" aria-label="Próximo mês">›</button>
+      <input type="month" id="month-input" class="month-input" aria-label="Mês de referência">
+    </div>
+
+    <div class="topbar-right">
+      <span class="sync-dot" id="sync-dot" title="Sincronizado"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="logout">Sair</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Seções"></nav>
+
+  <main id="view" class="view" tabindex="-1"></main>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

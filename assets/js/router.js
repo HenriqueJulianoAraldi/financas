@@ -1,0 +1,81 @@
+// Roteamento por hash — funciona em subpasta do GitHub Pages sem configuração.
+
+import { el, clear } from './dom.js';
+import * as dashboard from './views/dashboard.js';
+import * as transactions from './views/transactions.js';
+import * as budget from './views/budget.js';
+import * as investments from './views/investments.js';
+import * as goals from './views/goals.js';
+import * as settings from './views/settings.js';
+
+// `short` é o rótulo usado na barra inferior do celular, onde os seis cabem justos.
+export const ROUTES = [
+  { path: '', label: 'Visão geral', short: 'Visão', icon: '◈', view: dashboard, month: true },
+  { path: 'lancamentos', label: 'Lançamentos', short: 'Lançar', icon: '≡', view: transactions, month: true },
+  { path: 'orcamento', label: 'Orçamento', short: 'Orçam.', icon: '◑', view: budget, month: true },
+  { path: 'investimentos', label: 'Investimentos', short: 'Carteira', icon: '▲', view: investments, month: false },
+  { path: 'metas', label: 'Metas', short: 'Metas', icon: '★', view: goals, month: false },
+  { path: 'ajustes', label: 'Ajustes', short: 'Ajustes', icon: '⚙', view: settings, month: false },
+];
+
+let container = null;
+let onNavigate = null;
+
+export function currentRoute() {
+  const path = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+  return ROUTES.find((route) => route.path === path) ?? ROUTES[0];
+}
+
+export function buildTabs(nav) {
+  clear(nav);
+  for (const route of ROUTES) {
+    nav.append(el('a', {
+      class: 'tab',
+      href: `#/${route.path}`,
+      title: route.label,
+      dataset: { path: route.path },
+    },
+      el('span', { class: 'tab-icon', 'aria-hidden': 'true' }, route.icon),
+      el('span', { class: 'tab-full' }, route.label),
+      el('span', { class: 'tab-short', 'aria-hidden': 'true' }, route.short)
+    ));
+  }
+}
+
+function markActive(nav) {
+  const active = currentRoute().path;
+  for (const tab of nav.querySelectorAll('.tab')) {
+    if (tab.dataset.path === active) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
+}
+
+export function initRouter({ viewEl, navEl, onRender }) {
+  container = viewEl;
+  onNavigate = onRender;
+  buildTabs(navEl);
+  window.addEventListener('hashchange', () => {
+    markActive(navEl);
+    render();
+    container.scrollIntoView({ block: 'start' });
+  });
+  markActive(navEl);
+  render();
+}
+
+/** Redesenha a tela atual. Chamado também quando o store muda. */
+export function render() {
+  if (!container) return;
+  const route = currentRoute();
+  clear(container);
+  try {
+    container.append(route.view.render());
+  } catch (error) {
+    console.error(error);
+    container.append(el('div', { class: 'empty' },
+      el('p', {}, 'Algo quebrou ao desenhar esta tela.'),
+      el('p', { class: 'small' }, error.message)
+    ));
+  }
+  onNavigate?.(route);
+}

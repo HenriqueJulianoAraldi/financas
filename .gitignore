@@ -1,0 +1,7 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# ferramentas locais de desenvolvimento, não fazem parte do site
+.claude/
