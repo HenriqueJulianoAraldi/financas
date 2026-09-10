@@ -57,7 +57,10 @@ export function initRouter({ viewEl, navEl, onRender }) {
   window.addEventListener('hashchange', () => {
     markActive(navEl);
     render(true);
-    container.scrollIntoView({ block: 'start' });
+    // A tela nova começa no topo da página. Não usar scrollIntoView no
+    // container: ele fica abaixo do cabeçalho, e alinhar o topo dele com o
+    // topo da janela empurra o cabeçalho para fora, abrindo a tela rolada.
+    window.scrollTo(0, 0);
   });
   markActive(navEl);
   render(true);
