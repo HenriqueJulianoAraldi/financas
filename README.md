@@ -65,6 +65,11 @@ git push
 
 O Pages republica sozinho em cerca de um minuto.
 
+> **Depois de publicar, o celular pode continuar mostrando a versão antiga.** O GitHub
+> Pages serve os arquivos com `Cache-Control: max-age=600`, então por até dez minutos o
+> navegador reusa o que já tem em cache sem consultar o servidor — recarregar não
+> adianta nessa janela. Para conferir uma mudança na hora, abra numa aba anônima.
+
 ### Rodar localmente
 
 ```bash
