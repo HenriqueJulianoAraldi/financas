@@ -642,13 +642,70 @@ td.actions { text-align: right; white-space: nowrap; width: 1%; }
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--border);
   }
+  /* Na barra inferior a pílula fica pesada demais. O ativo é marcado por uma
+     luz roxa atrás do ícone, com o rótulo apenas clareando. */
   .tab {
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.2rem;
     font-size: 0.68rem;
-    padding: 0.35rem 0.35rem;
+    padding: 0.4rem 0.35rem 0.3rem;
+    border: 0;
+    background: none;
+    color: var(--text-dim);
   }
-  .tab .tab-icon { font-size: 1.05rem; }
+  .tab:hover { background: none; color: var(--text-mid); }
+  .tab[aria-current="page"] {
+    background: none;
+    border-color: transparent;
+    color: var(--text);
+    font-weight: 650;
+  }
+
+  .tab .tab-icon {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.6rem;
+    font-size: 1.05rem;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+  /* o brilho: fica atrás do glifo, some quando a aba não está ativa */
+  .tab .tab-icon::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: radial-gradient(circle closest-side, var(--purple-glow), transparent 72%);
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    pointer-events: none;
+  }
+  .tab[aria-current="page"] .tab-icon {
+    color: var(--purple-bright);
+    transform: translateY(-1px);
+  }
+  .tab[aria-current="page"] .tab-icon::before {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  /* fiapo de luz na borda de cima, como se viesse de trás da barra */
+  .tab[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2.2rem;
+    height: 2px;
+    transform: translateX(-50%);
+    border-radius: 0 0 2px 2px;
+    background: linear-gradient(90deg, transparent, var(--purple-bright), transparent);
+    opacity: 0.9;
+  }
   .tab-full {
     position: absolute;
     width: 1px;
