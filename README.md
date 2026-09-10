@@ -40,28 +40,30 @@ Em **Authentication → Providers → Email**, para uso pessoal o mais prático 
 hora, sem depender de e-mail (o serviço de e-mail gratuito do Supabase tem limite de
 poucas mensagens por hora).
 
-Em **Authentication → URL Configuration**, deixe na allowlist apenas:
+Em **Authentication → URL Configuration**:
 
-```
-https://SEU-USUARIO.github.io/SEU-REPO/
-http://localhost:8000
-```
+- **Site URL**: `https://henriquejulianoaraldi.github.io/financas/`
+- **Redirect URLs**: `https://henriquejulianoaraldi.github.io/financas/**` e
+  `http://localhost:8000/**`
 
 ### 3. Publicar no GitHub Pages
 
-```bash
-git init
-git add .
-git commit -m "Finanças: primeira versão"
-git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/SEU-REPO.git
-git push -u origin main
-```
-
-No GitHub: **Settings → Pages → Source: Deploy from a branch → main / (root)**.
-Em um ou dois minutos a página fica em `https://SEU-USUARIO.github.io/SEU-REPO/`.
+O repositório é [HenriqueJulianoAraldi/financas](https://github.com/HenriqueJulianoAraldi/financas).
+Para ligar a publicação, uma vez só: **Settings → Pages → Source: Deploy from a branch →
+Branch `main` / `(root)` → Save**. Em um ou dois minutos a página fica em
+<https://henriquejulianoaraldi.github.io/financas/>.
 
 O arquivo `.nojekyll` está no repositório para o Pages não ignorar nada.
+
+Depois disso, publicar uma alteração é:
+
+```bash
+git add -A
+git commit -m "descrição da mudança"
+git push
+```
+
+O Pages republica sozinho em cerca de um minuto.
 
 ### Rodar localmente
 
