@@ -17,6 +17,10 @@ const MONTHS = [
   'jul', 'ago', 'set', 'out', 'nov', 'dez',
 ];
 
+const WEEKDAYS = [
+  'domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado',
+];
+
 const MONTHS_LONG = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -102,6 +106,35 @@ export function monthLabelLong(monthKey) {
 /** 'YYYY-MM' → 'YYYY-MM-01' (competência sempre no dia 1) */
 export function monthStart(monthKey) {
   return `${monthKey.slice(0, 7)}-01`;
+}
+
+/** Soma dias a 'YYYY-MM-DD'. */
+export function addDays(iso, delta) {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d + delta));
+  return `${base.getUTCFullYear()}-${pad(base.getUTCMonth() + 1)}-${pad(base.getUTCDate())}`;
+}
+
+/** Último dia do mês de 'YYYY-MM' → 'YYYY-MM-DD'. */
+export function monthEnd(monthKey) {
+  const [y, m] = monthKey.slice(0, 7).split('-').map(Number);
+  return `${monthKey.slice(0, 7)}-${pad(new Date(Date.UTC(y, m, 0)).getUTCDate())}`;
+}
+
+/** 0 = domingo … 6 = sábado */
+export function weekday(iso) {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** Cabeçalho de grupo do dia: 'Hoje', 'Ontem', 'Anteontem' ou 'sexta, 5 de set'. */
+export function dayLabel(iso) {
+  const hoje = todayISO();
+  if (iso === hoje) return 'Hoje';
+  if (iso === addDays(hoje, -1)) return 'Ontem';
+  if (iso === addDays(hoje, -2)) return 'Anteontem';
+  const [, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${WEEKDAYS[weekday(iso)]}, ${d} de ${MONTHS[m - 1]}`;
 }
 
 /** Soma meses a 'YYYY-MM' ou 'YYYY-MM-DD', preservando o dia quando possível. */

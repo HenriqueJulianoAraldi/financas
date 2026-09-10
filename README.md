@@ -108,6 +108,13 @@ que mês ele pesa no orçamento). Para conta corrente e dinheiro são o mesmo m�
 cartão de crédito, uma compra feita depois do dia de fechamento cai na fatura do mês
 seguinte — por isso vale cadastrar o dia de fechamento do cartão em **Ajustes**.
 
+**Períodos em Lançamentos.** A lista é agrupada por dia e filtrável por Hoje, Ontem,
+Anteontem, Semana, Quinzena, Mês, Trimestre, Semestre, Ano e Personalizado. **Mês** é o
+único por competência — segue o mês escolhido no topo e casa com o Orçamento e a Visão
+geral. Os demais são calendário puro sobre a data do lançamento, que é o que "Hoje"
+significa para quem quer saber quanto gastou hoje. O intervalo resolvido aparece sempre
+abaixo dos botões, e o seletor de mês some quando não é ele que manda.
+
 **Parcelas.** Ao lançar uma compra no cartão com N parcelas, são criados N lançamentos
 com a mesma data de compra e competências consecutivas. Excluir uma parcela exclui a
 compra inteira.

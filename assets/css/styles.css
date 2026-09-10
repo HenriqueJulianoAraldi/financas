@@ -539,6 +539,94 @@ td.actions { text-align: right; white-space: nowrap; width: 1%; }
 .chip.pos { color: var(--income); border-color: rgba(63, 191, 143, 0.35); }
 .chip.neg { color: var(--danger); border-color: rgba(239, 106, 106, 0.35); }
 
+/* --- barra de períodos ----------------------------------------------- */
+
+.period-bar { display: grid; gap: 0.55rem; }
+.period-chips {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.15rem;
+}
+.period-chips::-webkit-scrollbar { display: none; }
+.period-chip {
+  flex: none;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-mid);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.period-chip:hover { color: var(--text); border-color: var(--border-strong); }
+.period-chip.is-active {
+  color: var(--text);
+  background: var(--purple-soft);
+  border-color: rgba(139, 92, 246, 0.45);
+  box-shadow: 0 4px 14px -8px var(--purple-glow);
+}
+.period-custom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  max-width: 380px;
+}
+.period-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
+.period-range { font-size: 0.82rem; font-weight: 600; color: var(--text-mid); }
+
+/* --- lista agrupada por dia ------------------------------------------ */
+
+.card-flush { padding: 0.35rem 0; }
+.day-group + .day-group { border-top: 1px solid var(--border); }
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.75rem 1.15rem 0.35rem;
+}
+.day-title {
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-mid);
+}
+.day-date { font-size: 0.74rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.day-total { margin-left: auto; font-size: 0.82rem; font-weight: 600; }
+.day-total.pos { color: var(--income); }
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1.15rem;
+}
+.entry:hover { background: var(--bg-soft); }
+.entry-main { flex: 1; min-width: 0; }
+.entry-desc {
+  font-size: 0.9rem;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-sub {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-amount { font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+.entry-amount.pos { color: var(--income); }
+.entry-actions { display: flex; gap: 0.1rem; flex: none; }
+
 /* --- gráficos ------------------------------------------------------- */
 
 .chart-box { position: relative; height: 260px; }

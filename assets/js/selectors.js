@@ -3,7 +3,10 @@
 // Nenhuma dessas contas é gravada no banco.
 
 import { state } from './store.js';
-import { round2, monthStart, addMonths, monthsBetween, currentMonth, todayISO } from './format.js';
+import {
+  round2, monthStart, monthEnd, addMonths, addDays, monthsBetween,
+  currentMonth, todayISO, weekday, dateBR, dayLabel, monthLabelLong,
+} from './format.js';
 
 export const ASSET_CLASSES = [
   { value: 'acao', label: 'Ações' },
@@ -71,6 +74,120 @@ export function competenceFor(dateISO, accountId) {
   }
   const day = Number(dateISO.slice(8, 10));
   return monthStart(day > account.closing_day ? addMonths(month, 1) : month);
+}
+
+// --- períodos --------------------------------------------------------
+
+export const PERIODS = [
+  { key: 'hoje', label: 'Hoje' },
+  { key: 'ontem', label: 'Ontem' },
+  { key: 'anteontem', label: 'Anteontem' },
+  { key: 'semana', label: 'Semana' },
+  { key: 'quinzena', label: 'Quinzena' },
+  { key: 'mes', label: 'Mês' },
+  { key: 'trimestre', label: 'Trimestre' },
+  { key: 'semestre', label: 'Semestre' },
+  { key: 'ano', label: 'Ano' },
+  { key: 'custom', label: 'Personalizado' },
+];
+
+function range(from, to) {
+  return { from, to, label: `${dateBR(from)} a ${dateBR(to)}`, byCompetence: false };
+}
+
+function oneDay(iso) {
+  return { from: iso, to: iso, label: dayLabel(iso), byCompetence: false };
+}
+
+/**
+ * Converte a escolha do usuário num intervalo concreto.
+ *
+ * "Mês" é o único período por competência: ele acompanha o mês escolhido no
+ * topo e casa com o Orçamento e a Visão geral, onde uma compra no cartão pesa
+ * na fatura. Os demais são calendário puro, sobre a data do lançamento — é o
+ * que "Hoje" significa para quem pergunta quanto gastou hoje.
+ */
+export function resolvePeriod(key, { month = currentMonth(), from, to } = {}) {
+  const hoje = todayISO();
+  const ano = hoje.slice(0, 4);
+  const mesAtual = hoje.slice(0, 7);
+  const mesNumero = Number(hoje.slice(5, 7));
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  switch (key) {
+    case 'hoje':
+      return oneDay(hoje);
+    case 'ontem':
+      return oneDay(addDays(hoje, -1));
+    case 'anteontem':
+      return oneDay(addDays(hoje, -2));
+    case 'semana': {
+      // segunda a domingo
+      const inicio = addDays(hoje, -((weekday(hoje) + 6) % 7));
+      return range(inicio, addDays(inicio, 6));
+    }
+    case 'quinzena':
+      return Number(hoje.slice(8, 10)) <= 15
+        ? range(`${mesAtual}-01`, `${mesAtual}-15`)
+        : range(`${mesAtual}-16`, monthEnd(mesAtual));
+    case 'trimestre': {
+      const primeiro = Math.floor((mesNumero - 1) / 3) * 3 + 1;
+      return range(`${ano}-${pad2(primeiro)}-01`, monthEnd(`${ano}-${pad2(primeiro + 2)}`));
+    }
+    case 'semestre':
+      return mesNumero <= 6
+        ? range(`${ano}-01-01`, monthEnd(`${ano}-06`))
+        : range(`${ano}-07-01`, `${ano}-12-31`);
+    case 'ano':
+      return range(`${ano}-01-01`, `${ano}-12-31`);
+    case 'custom': {
+      const inicio = from || hoje;
+      const fim = to || hoje;
+      return inicio <= fim ? range(inicio, fim) : range(fim, inicio);
+    }
+    case 'mes':
+    default:
+      return {
+        from: monthStart(month),
+        to: monthEnd(month),
+        label: monthLabelLong(month),
+        byCompetence: true,
+      };
+  }
+}
+
+/** Lançamentos do período, por competência ou por data conforme o caso. */
+export function transactionsOfPeriod(period, month = currentMonth()) {
+  if (period.byCompetence) return transactionsOfMonth(month);
+  return state.transactions.filter((t) => t.date >= period.from && t.date <= period.to);
+}
+
+/** Totais de uma lista qualquer, para os cartões acompanharem o que está na tela. */
+export function totalsOf(rows) {
+  let income = 0;
+  let expense = 0;
+  for (const t of rows) {
+    if (t.kind === 'income') income += Number(t.amount);
+    else expense += Number(t.amount);
+  }
+  return { income: round2(income), expense: round2(expense), balance: round2(income - expense) };
+}
+
+/** Agrupa por dia, do mais recente para o mais antigo. */
+export function groupByDay(rows) {
+  const grupos = new Map();
+  for (const row of rows) {
+    if (!grupos.has(row.date)) grupos.set(row.date, []);
+    grupos.get(row.date).push(row);
+  }
+  return [...grupos.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, items]) => ({
+      date,
+      label: dayLabel(date),
+      items: items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
+      ...totalsOf(items),
+    }));
 }
 
 // --- lançamentos -----------------------------------------------------

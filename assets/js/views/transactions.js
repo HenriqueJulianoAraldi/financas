@@ -1,32 +1,52 @@
-// Lançamentos do mês: tabela, formulário (com parcelamento) e importação de CSV.
+// Lançamentos: lista agrupada por dia, filtros de período, formulário (com
+// parcelamento) e importação de CSV.
 
 import { el, clear, field, select, iconButton, modal, confirmDialog, toast, empty } from '../dom.js';
 import * as store from '../store.js';
 import { state } from '../store.js';
 import {
-  transactionsOfMonth, monthTotals, competenceFor, categoryName, categoryColor,
-  accountName, isCreditCard, creditInvoices,
+  transactionsOfPeriod, resolvePeriod, totalsOf, groupByDay, PERIODS,
+  competenceFor, categoryName, categoryColor, accountName, isCreditCard, creditInvoices,
 } from '../selectors.js';
-import { brl, dateBR, todayISO, parseMoney, round2, addMonths, monthLabelLong } from '../format.js';
+import { brl, dateBR, todayISO, parseMoney, round2, addMonths } from '../format.js';
 import { getMonth } from '../ui-state.js';
 import { parseCSV, guessMapping, buildRows, dedupeKey } from '../csv.js';
 
 // Sobrevive ao redesenho disparado pelo store.
-const filters = { text: '', kind: '', categoryId: '', accountId: '' };
+const filters = {
+  text: '', kind: '', categoryId: '', accountId: '',
+  period: 'mes', from: todayISO(), to: todayISO(),
+};
 
-// Filtrar troca só a tabela — redesenhar a tela inteira roubaria o foco do campo de busca.
-let tableHost = null;
+// Trocar um filtro redesenha só a lista — refazer a tela inteira roubaria o
+// foco do campo de busca no meio da digitação.
+let listHost = null;
+let statsHost = null;
 let countLabel = null;
+let rangeLabel = null;
+
+function currentPeriod() {
+  return resolvePeriod(filters.period, {
+    month: getMonth(), from: filters.from, to: filters.to,
+  });
+}
 
 export function render() {
-  const month = getMonth();
-  const rows = applyFilters(transactionsOfMonth(month));
+  const period = currentPeriod();
+  const rows = applyFilters(transactionsOfPeriod(period, getMonth()));
 
-  tableHost = el('div', {}, tableCard(rows));
+  statsHost = el('div', { class: 'grid grid-stats' }, ...statCards(totalsOf(rows)));
+  listHost = el('div', {}, listCard(rows, period));
   countLabel = el('span', { class: 'muted small' }, countText(rows.length));
+  rangeLabel = el('span', { class: 'period-range' }, period.label);
+
+  // O seletor de mês do topo só comanda o período "Mês"; nos outros ele não
+  // faria nada e confundiria. Roda depois do onRender do roteador.
+  queueMicrotask(syncMonthNav);
 
   return el('div', { class: 'stack' },
-    statsRow(monthTotals(month)),
+    statsHost,
+    periodBar(),
     el('div', { class: 'toolbar' },
       el('button', { class: 'btn btn-primary', onclick: () => openForm() }, '+ Novo lançamento'),
       el('button', { class: 'btn btn-ghost', onclick: openImport }, 'Importar CSV'),
@@ -34,28 +54,41 @@ export function render() {
       countLabel
     ),
     filtersCard(),
-    tableHost,
-    ...invoiceCards(month)
+    listHost,
+    ...(period.byCompetence ? invoiceCards(getMonth()) : [])
   );
+}
+
+function syncMonthNav() {
+  const nav = document.getElementById('month-nav');
+  if (nav) nav.hidden = filters.period !== 'mes';
 }
 
 function countText(count) {
   return `${count} ${count === 1 ? 'lançamento' : 'lançamentos'}`;
 }
 
-function refreshTable() {
-  if (!tableHost?.isConnected) return;
-  const rows = applyFilters(transactionsOfMonth(getMonth()));
-  clear(tableHost).append(tableCard(rows));
-  countLabel.textContent = countText(rows.length);
+/** Trocar o período muda a tela toda (faturas, seletor de mês), então redesenha. */
+function rerender() {
+  import('../router.js').then((router) => router.render());
 }
 
-function statsRow(totals) {
-  return el('div', { class: 'grid grid-stats' },
+function refreshList() {
+  if (!listHost?.isConnected) return;
+  const period = currentPeriod();
+  const rows = applyFilters(transactionsOfPeriod(period, getMonth()));
+  clear(listHost).append(listCard(rows, period));
+  clear(statsHost).append(...statCards(totalsOf(rows)));
+  countLabel.textContent = countText(rows.length);
+  rangeLabel.textContent = period.label;
+}
+
+function statCards(totals) {
+  return [
     stat('Receitas', brl(totals.income), 'income'),
     stat('Despesas', brl(totals.expense), 'expense'),
-    stat('Saldo', brl(totals.balance), totals.balance < 0 ? 'danger' : null)
-  );
+    stat('Saldo', brl(totals.balance), totals.balance < 0 ? 'danger' : null),
+  ];
 }
 
 function stat(label, value, tone) {
@@ -76,17 +109,67 @@ function applyFilters(rows) {
   });
 }
 
+function periodBar() {
+  const chips = PERIODS.map((option) => el('button', {
+    type: 'button',
+    class: `period-chip${filters.period === option.key ? ' is-active' : ''}`,
+    'aria-pressed': filters.period === option.key ? 'true' : 'false',
+    onclick: () => {
+      if (filters.period === option.key) return;
+      filters.period = option.key;
+      rerender();
+    },
+  }, option.label));
+
+  const dateInput = (key) => el('input', {
+    type: 'date',
+    value: filters[key],
+    onchange: (event) => {
+      filters[key] = event.target.value || todayISO();
+      refreshList();
+    },
+  });
+
+  const custom = el('div', { class: 'period-custom', hidden: filters.period !== 'custom' },
+    field('De', dateInput('from')),
+    field('Até', dateInput('to'))
+  );
+
+  const chipsRow = el('div', { class: 'period-chips' }, ...chips);
+
+  // A fila rola na horizontal no celular: traz a pílula ativa para o centro.
+  // Mexer no scrollLeft do container em vez de scrollIntoView, que arrastaria
+  // a página inteira junto.
+  queueMicrotask(() => {
+    const ativo = chipsRow.querySelector('.is-active');
+    if (!ativo || !chipsRow.isConnected) return;
+    const alvo = ativo.offsetLeft - (chipsRow.clientWidth - ativo.offsetWidth) / 2;
+    chipsRow.scrollLeft = Math.max(0, alvo);
+  });
+
+  return el('div', { class: 'period-bar' },
+    chipsRow,
+    custom,
+    el('div', { class: 'period-foot' },
+      rangeLabel,
+      filters.period === 'mes'
+        ? el('span', { class: 'dim small' }, 'por competência — compra no cartão entra na fatura')
+        : null
+    )
+  );
+}
+
 function filtersCard() {
   const update = (key) => (event) => {
     filters[key] = event.target.value;
-    refreshTable();
+    refreshList();
   };
 
   const search = el('input', {
     type: 'search',
     placeholder: 'Buscar descrição…',
     value: filters.text,
-    oninput: debounce((event) => { filters.text = event.target.value; refreshTable(); }, 200),
+    oninput: debounce((event) => { filters.text = event.target.value; refreshList(); }, 200),
   });
 
   return el('div', { class: 'filters' },
@@ -100,58 +183,61 @@ function filtersCard() {
   );
 }
 
-function tableCard(rows) {
+function listCard(rows, period) {
   if (!rows.length) {
-    const anyThisMonth = transactionsOfMonth(getMonth()).length > 0;
+    const semFiltro = transactionsOfPeriod(period, getMonth()).length === 0;
     return el('div', { class: 'card' },
       empty(
-        anyThisMonth ? 'Nenhum lançamento bate com os filtros.' : `Nada lançado em ${monthLabelLong(getMonth()).toLowerCase()}.`,
-        el('button', { class: 'btn btn-primary', onclick: () => openForm() }, 'Lançar o primeiro')
+        semFiltro
+          ? `Nada lançado em ${period.label.toLowerCase()}.`
+          : 'Nenhum lançamento bate com os filtros.',
+        semFiltro
+          ? el('button', { class: 'btn btn-primary', onclick: () => openForm() }, 'Lançar o primeiro')
+          : null
       )
     );
   }
 
-  const body = el('tbody');
-  for (const row of rows) body.append(tableRow(row));
-
-  return el('div', { class: 'card' },
-    el('div', { class: 'table-wrap' },
-      el('table', {},
-        el('thead', {}, el('tr', {},
-          el('th', {}, 'Data'),
-          el('th', {}, 'Descrição'),
-          el('th', {}, 'Categoria'),
-          el('th', {}, 'Conta'),
-          el('th', { class: 'num' }, 'Valor'),
-          el('th', {}, '')
-        )),
-        body
-      )
-    )
+  return el('div', { class: 'card card-flush' },
+    el('div', { class: 'days' }, ...groupByDay(rows).map(dayGroup))
   );
 }
 
-function tableRow(row) {
-  const installment = row.installment_total > 1
-    ? el('span', { class: 'chip' }, `${row.installment_no}/${row.installment_total}`)
-    : null;
+function dayGroup(grupo) {
+  const liquido = grupo.balance;
+  return el('section', { class: 'day-group' },
+    el('header', { class: 'day-head' },
+      el('span', { class: 'day-title' }, grupo.label),
+      el('span', { class: 'day-date' }, dateBR(grupo.date)),
+      el('span', { class: `day-total num ${liquido >= 0 ? 'pos' : ''}` },
+        `${liquido >= 0 ? '+' : '−'} ${brl(Math.abs(liquido))}`)
+    ),
+    ...grupo.items.map(entryRow)
+  );
+}
 
-  return el('tr', {},
-    el('td', { class: 'num' }, dateBR(row.date)),
-    el('td', {},
-      el('div', { class: 'cell-main' }, row.description, ' ', installment),
-      row.notes && el('div', { class: 'cell-sub' }, row.notes),
-      row.recurring_id && el('div', { class: 'cell-sub' }, 'recorrente')
+function entryRow(row) {
+  const marcas = [
+    categoryName(row.category_id),
+    accountName(row.account_id),
+    row.installment_total > 1 ? `parcela ${row.installment_no}/${row.installment_total}` : null,
+    row.recurring_id ? 'fixo' : null,
+    row.notes || null,
+  ].filter(Boolean).join(' · ');
+
+  return el('div', { class: 'entry' },
+    el('span', {
+      class: 'dot',
+      style: { background: categoryColor(row.category_id) },
+      title: categoryName(row.category_id),
+    }),
+    el('div', { class: 'entry-main' },
+      el('div', { class: 'entry-desc' }, row.description),
+      el('div', { class: 'entry-sub' }, marcas)
     ),
-    el('td', {},
-      el('span', { class: 'chip' },
-        el('span', { class: 'dot', style: { background: categoryColor(row.category_id) } }),
-        categoryName(row.category_id))
-    ),
-    el('td', { class: 'muted' }, accountName(row.account_id)),
-    el('td', { class: `num ${row.kind === 'income' ? 'pos' : ''}` },
+    el('span', { class: `entry-amount num ${row.kind === 'income' ? 'pos' : ''}` },
       `${row.kind === 'income' ? '+' : '−'} ${brl(row.amount)}`),
-    el('td', { class: 'actions' },
+    el('span', { class: 'entry-actions' },
       iconButton('✎', 'Editar', () => openForm(row)),
       iconButton('🗑', 'Excluir', () => removeTransaction(row), 'danger')
     )
