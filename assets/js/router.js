@@ -56,20 +56,28 @@ export function initRouter({ viewEl, navEl, onRender }) {
   buildTabs(navEl);
   window.addEventListener('hashchange', () => {
     markActive(navEl);
-    render();
+    render(true);
     container.scrollIntoView({ block: 'start' });
   });
   markActive(navEl);
-  render();
+  render(true);
 }
 
-/** Redesenha a tela atual. Chamado também quando o store muda. */
-export function render() {
+/**
+ * Redesenha a tela atual.
+ * `animate` só é ligado em navegação (troca de aba ou de mês). O store dispara
+ * este mesmo render a cada alteração de dado, e animar ali faria a tela piscar
+ * inteira toda vez que um lançamento fosse salvo.
+ */
+export function render(animate = false) {
   if (!container) return;
   const route = currentRoute();
   clear(container);
   try {
-    container.append(route.view.render());
+    const view = route.view.render();
+    // O nó é novo a cada render, então a animação sempre roda do começo.
+    if (animate) view.classList.add('view-enter');
+    container.append(view);
   } catch (error) {
     console.error(error);
     container.append(el('div', { class: 'empty' },

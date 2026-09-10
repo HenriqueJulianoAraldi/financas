@@ -76,7 +76,7 @@ async function startApp(session) {
     onRender: (route) => { $('month-nav').hidden = !route.month; },
   });
   store.onChange(() => renderRoute());
-  onMonthChange(() => { updateMonthLabel(); renderRoute(); });
+  onMonthChange(() => { updateMonthLabel(); renderRoute(true); });
   updateMonthLabel();
 
   setSync('syncing');

@@ -259,6 +259,7 @@ code {
   white-space: nowrap;
   cursor: pointer;
   text-decoration: none;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 .tab:hover { color: var(--text); background: var(--surface); }
 .tab[aria-current="page"] {
@@ -274,6 +275,18 @@ code {
   max-width: 1280px;
   margin: 0 auto;
   outline: none;
+}
+
+/* Entrada da tela. Aplicada só em navegação (troca de aba ou de mês): o store
+   redesenha a view a cada dado salvo, e animar ali faria a tela piscar. */
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+/* Sem fill-mode: não há delay, então o primeiro quadro já é o `from` e nada
+   pisca. Evita também deixar o elemento preso no estado final por engano. */
+.view-enter {
+  animation: view-enter 0.24s cubic-bezier(0.2, 0.6, 0.3, 1);
 }
 
 /* --- cartões e grids ------------------------------------------------ */
@@ -693,8 +706,9 @@ td.actions { text-align: right; white-space: nowrap; width: 1%; }
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  /* fiapo de luz na borda de cima, como se viesse de trás da barra */
-  .tab[aria-current="page"]::before {
+  /* fiapo de luz na borda de cima, como se viesse de trás da barra.
+     Existe em todas as abas e só acende na ativa, para poder fazer fade. */
+  .tab::before {
     content: "";
     position: absolute;
     top: 0;
@@ -704,8 +718,11 @@ td.actions { text-align: right; white-space: nowrap; width: 1%; }
     transform: translateX(-50%);
     border-radius: 0 0 2px 2px;
     background: linear-gradient(90deg, transparent, var(--purple-bright), transparent);
-    opacity: 0.9;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
   }
+  .tab[aria-current="page"]::before { opacity: 0.9; }
   .tab-full {
     position: absolute;
     width: 1px;
